@@ -8,3 +8,4 @@ psycopg2-binary==2.9.9
 aiosqlite==0.20.0
 pyrogram==2.0.106
 tgcrypto==1.2.5
+psycopg
