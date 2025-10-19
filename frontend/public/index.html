@@ -97,20 +97,26 @@
           const a = document.createElement('a');
           a.textContent = 'Download';
           const pwd = document.getElementById('password').value;
-          a.href = API_BASE + '/api/download/' + encodeURIComponent(row.file_id) + '?key=' + encodeURIComponent(pwd);
-          a.onclick = (e) => { e.preventDefault(); download(row.file_id, row.name); };
+          a.href = '#';
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            download(row.file_id, row.name);
+          });
           act.appendChild(a); tr.appendChild(act);
           tbody.appendChild(tr);
         }
       }
 
-      async function download(file_id, name) {
-  const res = await fetch(API_BASE + '/api/download/' + encodeURIComponent(file_id) + '?key=' + encodeURIComponent(document.getElementById('password').value), { headers: headers() });
-        if (!res.ok) { alert('Download failed'); return; }
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = name || 'file'; a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      function download(file_id, name) {
+        // Trigger direct browser download by requesting the URL in a hidden iframe.
+        // The backend sets Content-Disposition: attachment; filename="..." so the browser saves the file directly.
+        const url = API_BASE + '/api/download/' + encodeURIComponent(file_id) + '?key=' + encodeURIComponent(document.getElementById('password').value);
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = url;
+        document.body.appendChild(iframe);
+        // Clean up after a minute; the browser manages the download independently.
+        setTimeout(() => { try { iframe.remove(); } catch (_) {} }, 60000);
       }
 
       async function upload() {
