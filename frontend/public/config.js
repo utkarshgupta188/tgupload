@@ -1,2 +1,2 @@
-// Optionally set API base if frontend is on a different origin
-// window.API_BASE = "https://your-render-service.onrender.com";
+// Set API base to your deployed backend URL on Render
+window.API_BASE = "https://tgupload-usyl.onrender.com";
