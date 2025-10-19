@@ -4,47 +4,51 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TG Cloud Storage</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 2rem; }
-      header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-      input[type="password"], input[type="text"] { padding: 0.5rem; }
-      .row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
-      table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-      th, td { padding: 0.5rem; border-bottom: 1px solid #eee; }
-      progress { width: 200px; }
-      .muted { color: #666; font-size: 0.9em; }
-      .right { margin-left: auto; }
-    </style>
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <div class="container">
     <script src="./config.js"></script>
     <header>
       <h1 style="margin:0;">TG Cloud</h1>
-      <div class="right">
+      <div class="right" id="header-pass" style="display:none;">
         <label>Password: <input id="password" type="password" /></label>
       </div>
     </header>
 
-    <section class="row">
+    <section class="row card" id="upload-section" style="display:none;">
       <input type="file" id="file" />
       <button id="upload">Upload</button>
       <progress id="progress" value="0" max="100" style="display:none;"></progress>
       <span id="status" class="muted"></span>
     </section>
 
-    <section class="row" style="margin-top:1rem;">
+    <section class="row card" id="search-section" style="margin-top:1rem; display:none;">
       <input type="text" id="search" placeholder="Search by name" />
       <button id="refresh">Refresh</button>
     </section>
 
-    <table>
+    <table id="files-table" style="display:none;">
       <thead>
         <tr><th>Name</th><th>Size</th><th>Actions</th></tr>
       </thead>
       <tbody id="files"></tbody>
     </table>
 
-    <script>
+    <!-- Password modal -->
+    <div class="modal-overlay" id="pw-modal">
+      <div class="modal">
+        <h2>Enter Password</h2>
+        <p>Access to your storage is protected.</p>
+        <input id="pw-input" type="password" placeholder="API password" style="width:100%;" />
+        <div class="actions">
+          <button id="pw-submit">Continue</button>
+        </div>
+        <div id="pw-error" class="muted" style="color:#fca5a5; display:none;">Wrong password, try again.</div>
+      </div>
+    </div>
+
+  <script>
       // Determine API base. If served via a static server on 8080 or from file://, default to localhost:8000
       let API_BASE = window.API_BASE || location.origin;
       try {
@@ -97,27 +101,15 @@
           const a = document.createElement('a');
           a.textContent = 'Download';
           const pwd = document.getElementById('password').value;
-          a.href = '#';
-          a.addEventListener('click', (e) => {
-            e.preventDefault();
-            download(row.file_id, row.name);
-          });
+          a.href = API_BASE + '/api/download/' + encodeURIComponent(row.file_id) + '?key=' + encodeURIComponent(pwd);
+          a.target = '_blank';
+          a.rel = 'noopener';
           act.appendChild(a); tr.appendChild(act);
           tbody.appendChild(tr);
         }
       }
 
-      function download(file_id, name) {
-        // Trigger direct browser download by requesting the URL in a hidden iframe.
-        // The backend sets Content-Disposition: attachment; filename="..." so the browser saves the file directly.
-        const url = API_BASE + '/api/download/' + encodeURIComponent(file_id) + '?key=' + encodeURIComponent(document.getElementById('password').value);
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = url;
-        document.body.appendChild(iframe);
-        // Clean up after a minute; the browser manages the download independently.
-        setTimeout(() => { try { iframe.remove(); } catch (_) {} }, 60000);
-      }
+      // Direct anchor navigation with target=_blank triggers browser download using Content-Disposition from the API.
 
       async function upload() {
         const file = document.getElementById('file').files[0];
@@ -142,12 +134,54 @@
         await listFiles();
       }
 
+      function setAuthedUI(on) {
+        document.getElementById('header-pass').style.display = on ? '' : 'none';
+        document.getElementById('upload-section').style.display = on ? '' : 'none';
+        document.getElementById('search-section').style.display = on ? '' : 'none';
+        document.getElementById('files-table').style.display = on ? '' : 'none';
+      }
+
+      async function tryAuthAndLoad(pwd) {
+        // quick auth probe
+        let ok = false;
+        try {
+          const r = await fetch(API_BASE + '/api/health', { headers: { 'X-API-KEY': pwd } });
+          ok = r.ok;
+        } catch (_) { ok = false; }
+        if (!ok) return false;
+        // set into header input for subsequent calls
+        document.getElementById('password').value = pwd;
+        setAuthedUI(true);
+        await listFiles();
+        return true;
+      }
+
+      // Modal wiring
+      const modal = document.getElementById('pw-modal');
+      const pwInput = document.getElementById('pw-input');
+      const pwError = document.getElementById('pw-error');
+      const pwSubmit = document.getElementById('pw-submit');
+
+      pwSubmit.addEventListener('click', async () => {
+        const pwd = pwInput.value.trim();
+        pwError.style.display = 'none';
+        if (!pwd) { pwError.textContent = 'Please enter a password.'; pwError.style.display = ''; return; }
+        const ok = await tryAuthAndLoad(pwd);
+        if (ok) { modal.style.display = 'none'; }
+        else { pwError.textContent = 'Wrong password or server unreachable.'; pwError.style.display = ''; }
+      });
+      pwInput.addEventListener('keydown', async (e) => { if (e.key === 'Enter') { pwSubmit.click(); }});
+
+      // Keep the inline header password field in sync if changed later
+      document.getElementById('password').addEventListener('change', listFiles);
       document.getElementById('upload').onclick = upload;
       document.getElementById('refresh').onclick = listFiles;
       document.getElementById('search').oninput = () => { listFiles(); };
-      document.getElementById('password').addEventListener('change', listFiles);
 
-      listFiles();
+      // Show modal on load
+      setAuthedUI(false);
+      pwInput.focus();
     </script>
+    </div>
   </body>
 </html>
