@@ -79,6 +79,8 @@ Bots cannot send files to themselves as users. You need a destination chat to st
 - Start: `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`
 - Env Vars: `TELEGRAM_BOT_TOKEN`, `API_PASSWORD`, `DATABASE_URL` (optional), `TG_CHAT_ID`
 
+Note: If Render defaults to Python 3.13 and you see psycopg2 issues, this project uses psycopg 3. Set a Python 3.11 runtime if needed.
+
 ### Vercel (frontend)
 - Framework preset: Other
 - Root directory: `frontend`

@@ -2,6 +2,7 @@ services:
   - type: web
     name: tg-cloud-backend
     runtime: python
+    env: python
     plan: free
     envVars:
       - key: TELEGRAM_BOT_TOKEN
@@ -26,5 +27,5 @@ services:
         sync: false
       - key: BASE_URL
         sync: false
-    buildCommand: pip install -r backend/requirements.txt
+  buildCommand: pip install -r backend/requirements.txt
   startCommand: sh -lc "uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
