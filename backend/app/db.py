@@ -31,13 +31,17 @@ def get_database_url() -> str:
 
 
 DATABASE_URL = get_database_url()
+# Normalize postgres:// to postgresql:// for SQLAlchemy
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # Render ephemeral FS okay; for SQLite concurrent, check_same_thread
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
-# Avoid connection pooling on serverless or edge
+# Avoid connection pooling on serverless or edge (Postgres)
 engine = create_engine(
     DATABASE_URL,
-    poolclass=NullPool if DATABASE_URL.startswith("postgres") else None,
+    poolclass=NullPool if DATABASE_URL.startswith("postgresql") else None,
     connect_args=connect_args,
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)

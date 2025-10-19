@@ -27,4 +27,4 @@ services:
       - key: BASE_URL
         sync: false
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+  startCommand: sh -lc "uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
