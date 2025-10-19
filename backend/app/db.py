@@ -34,6 +34,9 @@ DATABASE_URL = get_database_url()
 # Normalize postgres:// to postgresql:// for SQLAlchemy
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# Prefer psycopg3 driver if none specified
+if DATABASE_URL.startswith("postgresql://") and "+" not in DATABASE_URL.split("://", 1)[0]:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
 # Render ephemeral FS okay; for SQLite concurrent, check_same_thread
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
