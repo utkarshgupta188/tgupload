@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: tg-cloud-backend
+    runtime: python
+    plan: free
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: API_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: TG_CHAT_ID
+        sync: false
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 127.0.0.1 --port $PORT

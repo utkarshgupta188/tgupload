@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TG Cloud Storage</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 2rem; }
+      header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+      input[type="password"], input[type="text"] { padding: 0.5rem; }
+      .row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+      table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+      th, td { padding: 0.5rem; border-bottom: 1px solid #eee; }
+      progress { width: 200px; }
+      .muted { color: #666; font-size: 0.9em; }
+      .right { margin-left: auto; }
+    </style>
+  </head>
+  <body>
+    <script src="./config.js"></script>
+    <header>
+      <h1 style="margin:0;">TG Cloud</h1>
+      <div class="right">
+        <label>Password: <input id="password" type="password" /></label>
+      </div>
+    </header>
+
+    <section class="row">
+      <input type="file" id="file" />
+      <button id="upload">Upload</button>
+      <progress id="progress" value="0" max="100" style="display:none;"></progress>
+      <span id="status" class="muted"></span>
+    </section>
+
+    <section class="row" style="margin-top:1rem;">
+      <input type="text" id="search" placeholder="Search by name" />
+      <button id="refresh">Refresh</button>
+    </section>
+
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Size</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="files"></tbody>
+    </table>
+
+    <script>
+      // Determine API base. If served via a static server on 8080 or from file://, default to localhost:8000
+      let API_BASE = window.API_BASE || location.origin;
+      try {
+        const fromFile = !location.origin || location.origin.startsWith('file://');
+        const on8080 = location.port === '8080';
+        if ((!window.API_BASE && (fromFile || on8080)) || API_BASE === 'null') {
+          API_BASE = 'http://localhost:8000';
+        }
+      } catch (e) {
+        API_BASE = window.API_BASE || 'http://localhost:8000';
+      }
+
+      function headers() {
+        const pwd = document.getElementById('password').value;
+        return { 'X-API-KEY': pwd };
+      }
+
+      function humanSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const units = ['B','KB','MB','GB','TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + units[i];
+      }
+
+      async function listFiles() {
+        const q = document.getElementById('search').value.trim();
+        const url = new URL(API_BASE + '/api/files');
+        if (q) url.searchParams.set('q', q);
+        let res;
+        try {
+          res = await fetch(url, { headers: headers() });
+        } catch (err) {
+          document.getElementById('status').textContent = 'Cannot reach API at ' + API_BASE + ': ' + (err && err.message ? err.message : err);
+          return;
+        }
+        if (!res.ok) {
+          const text = await res.text();
+          document.getElementById('status').textContent = 'Error ' + res.status + ' from API: ' + text;
+          return;
+        }
+        const data = await res.json();
+        const tbody = document.getElementById('files');
+        tbody.innerHTML = '';
+        for (const row of data) {
+          const tr = document.createElement('tr');
+          const name = document.createElement('td'); name.textContent = row.name; tr.appendChild(name);
+          const size = document.createElement('td'); size.textContent = humanSize(row.size || 0); tr.appendChild(size);
+          const act = document.createElement('td');
+          const a = document.createElement('a');
+          a.textContent = 'Download';
+          const pwd = document.getElementById('password').value;
+          a.href = API_BASE + '/api/download/' + encodeURIComponent(row.file_id) + '?key=' + encodeURIComponent(pwd);
+          a.onclick = (e) => { e.preventDefault(); download(row.file_id, row.name); };
+          act.appendChild(a); tr.appendChild(act);
+          tbody.appendChild(tr);
+        }
+      }
+
+      async function download(file_id, name) {
+  const res = await fetch(API_BASE + '/api/download/' + encodeURIComponent(file_id) + '?key=' + encodeURIComponent(document.getElementById('password').value), { headers: headers() });
+        if (!res.ok) { alert('Download failed'); return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = name || 'file'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+
+      async function upload() {
+        const file = document.getElementById('file').files[0];
+        if (!file) { alert('Pick a file'); return; }
+        const form = new FormData(); form.append('upload', file, file.name);
+
+        const prog = document.getElementById('progress'); prog.style.display = '';
+        const status = document.getElementById('status'); status.textContent = 'Uploading…';
+
+        // Use XHR to track progress (Fetch can with streams but XHR is simpler for progress)
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', API_BASE + '/api/upload');
+          const h = headers(); for (const k in h) xhr.setRequestHeader(k, h[k]);
+          xhr.upload.onprogress = (e) => { if (e.lengthComputable) { prog.value = (e.loaded / e.total) * 100; }};
+          xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(); else reject(new Error(xhr.statusText || 'Upload failed')); };
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.send(form);
+        });
+
+        status.textContent = 'Uploaded'; prog.style.display = 'none'; prog.value = 0; document.getElementById('file').value = '';
+        await listFiles();
+      }
+
+      document.getElementById('upload').onclick = upload;
+      document.getElementById('refresh').onclick = listFiles;
+      document.getElementById('search').oninput = () => { listFiles(); };
+      document.getElementById('password').addEventListener('change', listFiles);
+
+      listFiles();
+    </script>
+  </body>
+</html>
